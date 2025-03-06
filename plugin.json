@@ -11,6 +11,20 @@
       "code": "csv-split",
       "explain": "CSV文件拆分工具，支持按每份行数拆分并保留表头，自动保存到原文件所在目录",
       "cmds": ["csv拆分", "csv分割", "拆分csv", "分割csv", "CSV Split"]
+    },
+    {
+      "code": "csv-split-panel",
+      "explain": "CSV文件拆分工具 (超级面板)",
+      "cmds": [
+        {
+          "type": "files",
+          "label": "拆分CSV文件",
+          "fileType": "file",
+          "match": "/\\.csv$/i",
+          "minNum": 1,
+          "maxNum": 1
+        }
+      ]
     }
   ]
 } 

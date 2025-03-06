@@ -24,6 +24,32 @@ window.exports = {
       },
       placeholder: "CSV拆分工具"
     }
+  },
+  // 添加超级面板功能
+  "csv-split-panel": {
+    mode: "none",
+    args: {
+      enter: (action, callbackSetList) => {
+        // 从超级面板进入时的处理
+        // 检查是否有文件参数
+        if (action.type === 'files' && action.payload && action.payload.length > 0) {
+          // 获取文件路径
+          const filePath = action.payload[0].path;
+          
+          // 检查是否为CSV文件
+          if (filePath.toLowerCase().endsWith('.csv')) {
+            // 将文件路径保存到全局变量，供渲染进程使用
+            window.importedFilePath = filePath;
+            
+            // 打开主窗口
+            window.utools.redirect('csv-split', '', { type: 'imported', payload: filePath });
+          } else {
+            // 不是CSV文件，显示错误提示
+            window.utools.showNotification('请选择CSV文件');
+          }
+        }
+      }
+    }
   }
 };
 
@@ -126,5 +152,39 @@ window.utils = {
         }
       }, 100);
     }
+  },
+  
+  // 从文件系统读取CSV文件
+  readCSVFromFileSystem: (filePath) => {
+    try {
+      if (!filePath) return null;
+      
+      // 读取文件内容
+      const content = fs.readFileSync(filePath, 'utf-8');
+      
+      // 获取文件信息
+      const stats = fs.statSync(filePath);
+      const fileName = path.basename(filePath);
+      
+      return {
+        name: fileName,
+        path: filePath,
+        content: content,
+        size: stats.size
+      };
+    } catch (error) {
+      console.error('读取CSV文件出错:', error);
+      return null;
+    }
+  },
+  
+  // 获取从超级面板导入的文件路径
+  getImportedFilePath: () => {
+    return window.importedFilePath || null;
+  },
+  
+  // 清除导入的文件路径
+  clearImportedFilePath: () => {
+    window.importedFilePath = null;
   }
 }; 

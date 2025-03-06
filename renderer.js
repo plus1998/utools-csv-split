@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let csvRows = null;
   let filePath = null;
 
+  // 检查是否有从超级面板导入的文件
+  checkImportedFile();
+
   // 点击选择文件按钮
   selectFileBtn.addEventListener('click', () => {
     fileInput.click();
@@ -71,6 +74,82 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, false);
 
+  // 检查是否有从超级面板导入的文件
+  function checkImportedFile() {
+    const importedFilePath = window.utils.getImportedFilePath();
+    if (importedFilePath) {
+      // 清除导入的文件路径，避免重复处理
+      window.utils.clearImportedFilePath();
+      
+      // 从文件系统读取CSV文件
+      const fileData = window.utils.readCSVFromFileSystem(importedFilePath);
+      if (fileData) {
+        // 前置显示uTools窗口
+        window.utils.showMainWindow();
+        
+        // 处理导入的文件
+        handleImportedFile(fileData);
+      }
+    }
+    
+    // 监听来自uTools的消息
+    if (window.utools) {
+      window.utools.onPluginEnter(({ code, type, payload }) => {
+        if (code === 'csv-split' && type === 'imported' && payload) {
+          // 从文件系统读取CSV文件
+          const fileData = window.utils.readCSVFromFileSystem(payload);
+          if (fileData) {
+            // 处理导入的文件
+            handleImportedFile(fileData);
+          }
+        }
+      });
+    }
+  }
+  
+  // 处理从超级面板导入的文件
+  function handleImportedFile(fileData) {
+    selectedFile = {
+      name: fileData.name,
+      size: fileData.size,
+      type: 'text/csv'
+    };
+    
+    filePath = fileData.path;
+    csvContent = fileData.content;
+    
+    // 显示文件信息
+    const fileNameElement = document.createElement('p');
+    fileNameElement.textContent = `已选择文件: ${fileData.name}`;
+    fileNameElement.style.fontWeight = 'bold';
+    fileNameElement.style.marginTop = '10px';
+    
+    // 清除之前的文件名显示
+    const existingFileNames = dropArea.querySelectorAll('p:not(:first-child)');
+    existingFileNames.forEach(el => el.remove());
+    
+    dropArea.appendChild(fileNameElement);
+    
+    // 解析CSV内容
+    parseCSV(csvContent);
+    
+    // 显示文件信息
+    fileInfo.innerHTML = `
+      <p>文件名: ${fileData.name}</p>
+      <p>文件大小: ${formatFileSize(fileData.size)}</p>
+      <p>总行数: ${csvRows.length + 1} (含表头)</p>
+      <p>数据行数: ${csvRows.length}</p>
+      <p class="info-text">文件来源: 超级面板导入</p>
+    `;
+    
+    // 设置默认每份行数为总行数的1/10，最小为1000，最大为10000
+    const suggestedRowsPerFile = Math.min(Math.max(Math.round(csvRows.length / 10), 1000), 10000);
+    rowsPerFile.value = suggestedRowsPerFile;
+    
+    // 启用拆分按钮
+    splitBtn.disabled = false;
+  }
+
   // 处理文件
   function handleFile(file) {
     if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
@@ -107,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <p>文件大小: ${formatFileSize(file.size)}</p>
         <p>总行数: ${csvRows.length + 1} (含表头)</p>
         <p>数据行数: ${csvRows.length}</p>
+        <p class="info-text">文件来源: 手动选择</p>
       `;
       
       // 设置默认每份行数为总行数的1/10，最小为1000，最大为10000
