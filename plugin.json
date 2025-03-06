@@ -1,0 +1,16 @@
+{
+  "pluginName": "CSV拆分工具",
+  "description": "一个简单的CSV文件拆分工具，支持按每份行数拆分并保留表头，自动保存到原文件所在目录",
+  "main": "index.html",
+  "version": "0.0.1",
+  "author": "happyplus",
+  "logo": "logo.png",
+  "preload": "preload.js",
+  "features": [
+    {
+      "code": "csv-split",
+      "explain": "CSV文件拆分工具，支持按每份行数拆分并保留表头，自动保存到原文件所在目录",
+      "cmds": ["csv拆分", "csv分割", "拆分csv", "分割csv", "CSV Split"]
+    }
+  ]
+} 
