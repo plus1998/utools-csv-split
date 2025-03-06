@@ -23,7 +23,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // 文件选择变化
   fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
-      handleFile(e.target.files[0]);
+      // 前置显示uTools窗口
+      window.utils.showMainWindow();
+      
+      // 延迟一点处理文件，确保窗口已经前置
+      setTimeout(() => {
+        handleFile(e.target.files[0]);
+      }, 200);
     }
   });
 
@@ -58,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const files = dt.files;
     
     if (files.length > 0) {
+      // 前置显示uTools窗口
+      window.utils.showMainWindow();
+      
       handleFile(files[0]);
     }
   }, false);
@@ -106,6 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // 启用拆分按钮
       splitBtn.disabled = false;
+      
+      // 再次确保窗口前置
+      window.utils.showMainWindow();
     };
     reader.readAsText(file);
   }
@@ -242,6 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // 再次滚动到结果区域，确保用户能看到完整结果
         scrollToResults();
+        
+        // 确保窗口前置
+        window.utils.showMainWindow();
       } else {
         resultMessage.textContent = `保存文件时出错: ${result.error}`;
       }

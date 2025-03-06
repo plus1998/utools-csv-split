@@ -107,5 +107,24 @@ window.utils = {
     }
     
     return null;
+  },
+  
+  // 前置显示uTools窗口
+  showMainWindow: () => {
+    if (window.utools) {
+      // 显示主窗口
+      window.utools.showMainWindow();
+      
+      // 设置窗口置顶
+      setTimeout(() => {
+        try {
+          // 尝试使用setExpendHeight触发窗口刷新和前置
+          const currentHeight = window.utools.getExpendHeight();
+          window.utools.setExpendHeight(currentHeight);
+        } catch (e) {
+          console.error('设置窗口置顶失败:', e);
+        }
+      }, 100);
+    }
   }
 }; 
