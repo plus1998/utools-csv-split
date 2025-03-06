@@ -1,19 +1,139 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const dropArea = document.getElementById('dropArea');
-  const fileInput = document.getElementById('fileInput');
-  const selectFileBtn = document.getElementById('selectFileBtn');
-  const splitBtn = document.getElementById('splitBtn');
-  const rowsPerFile = document.getElementById('rowsPerFile');
-  const fileInfo = document.getElementById('fileInfo');
-  const resultArea = document.getElementById('resultArea');
-  const progressBar = document.getElementById('progressBar');
-  const resultMessage = document.getElementById('resultMessage');
+// 全局变量
+let selectedFile = null;
+let csvContent = null;
+let csvHeader = null;
+let csvRows = null;
+let filePath = null;
+let dropArea, fileInput, selectFileBtn, splitBtn, rowsPerFile, fileInfo, resultArea, progressBar, resultMessage;
 
-  let selectedFile = null;
-  let csvContent = null;
-  let csvHeader = null;
-  let csvRows = null;
-  let filePath = null;
+// 处理从超级面板导入的文件
+function handleImportedFile(fileData) {
+  try {
+    // 确保DOM元素已经加载
+    if (!dropArea) {
+      dropArea = document.getElementById('dropArea');
+      fileInfo = document.getElementById('fileInfo');
+      splitBtn = document.getElementById('splitBtn');
+      rowsPerFile = document.getElementById('rowsPerFile');
+    }
+    
+    if (!dropArea || !fileInfo || !splitBtn || !rowsPerFile) {
+      // 等待DOM加载完成后再次尝试
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          handleImportedFile(fileData);
+        });
+      }
+      return;
+    }
+    
+    selectedFile = {
+      name: fileData.name,
+      size: fileData.size,
+      type: 'text/csv'
+    };
+    
+    filePath = fileData.path;
+    csvContent = fileData.content;
+    
+    // 显示文件信息
+    const fileNameElement = document.createElement('p');
+    fileNameElement.textContent = `已选择文件: ${fileData.name}`;
+    fileNameElement.style.fontWeight = 'bold';
+    fileNameElement.style.marginTop = '10px';
+    
+    // 清除之前的文件名显示
+    const existingFileNames = dropArea.querySelectorAll('p:not(:first-child)');
+    existingFileNames.forEach(el => el.remove());
+    
+    dropArea.appendChild(fileNameElement);
+    
+    // 解析CSV内容
+    parseCSV(csvContent);
+    
+    if (!csvHeader || !csvRows || csvRows.length === 0) {
+      alert('CSV文件解析失败或文件为空，请检查文件格式');
+      return;
+    }
+    
+    // 显示文件信息
+    fileInfo.innerHTML = `
+      <p>文件名: ${fileData.name}</p>
+      <p>文件大小: ${formatFileSize(fileData.size)}</p>
+      <p>总行数: ${csvRows.length + 1} (含表头)</p>
+      <p>数据行数: ${csvRows.length}</p>
+      <p class="info-text">文件来源: 超级面板导入</p>
+    `;
+    
+    // 设置默认每份行数为总行数的1/10，最小为1000，最大为10000
+    const suggestedRowsPerFile = Math.min(Math.max(Math.round(csvRows.length / 10), 1000), 10000);
+    rowsPerFile.value = suggestedRowsPerFile;
+    
+    // 启用拆分按钮
+    splitBtn.disabled = false;
+  } catch (error) {
+    alert(`处理文件时出错: ${error.message}`);
+  }
+}
+
+// 解析CSV
+function parseCSV(content) {
+  const lines = content.split(/\r\n|\n/);
+  csvHeader = lines[0];
+  csvRows = lines.slice(1).filter(line => line.trim() !== '');
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 直接在页面中监听uTools的onPluginEnter事件
+// 这必须在DOMContentLoaded之前设置，以确保不会错过任何事件
+if (window.utools) {
+  window.utools.onPluginEnter(({ code, type, payload }) => {
+    // 处理从超级面板传入的文件
+    if (type === 'files' && payload && payload.length > 0) {
+      const file = payload[0];
+      
+      if (file.isFile && file.path.toLowerCase().endsWith('.csv')) {
+        // 从文件系统读取CSV文件
+        const fileData = window.utils.readCSVFromFileSystem(file.path);
+        if (fileData) {
+          // 处理导入的文件
+          handleImportedFile(fileData);
+        }
+      } else {
+        window.utools.showNotification('请选择CSV文件');
+      }
+    }
+    
+    // 处理从其他方式传入的文件路径
+    if (type === 'imported' && payload) {
+      // 从文件系统读取CSV文件
+      const fileData = window.utils.readCSVFromFileSystem(payload);
+      if (fileData) {
+        handleImportedFile(fileData);
+      }
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // 初始化DOM元素引用
+  dropArea = document.getElementById('dropArea');
+  fileInput = document.getElementById('fileInput');
+  selectFileBtn = document.getElementById('selectFileBtn');
+  splitBtn = document.getElementById('splitBtn');
+  rowsPerFile = document.getElementById('rowsPerFile');
+  fileInfo = document.getElementById('fileInfo');
+  resultArea = document.getElementById('resultArea');
+  progressBar = document.getElementById('progressBar');
+  resultMessage = document.getElementById('resultMessage');
 
   // 检查是否有从超级面板导入的文件
   checkImportedFile();
@@ -77,12 +197,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // 检查是否有从超级面板导入的文件
   function checkImportedFile() {
     const importedFilePath = window.utils.getImportedFilePath();
+    
     if (importedFilePath) {
       // 清除导入的文件路径，避免重复处理
       window.utils.clearImportedFilePath();
       
       // 从文件系统读取CSV文件
       const fileData = window.utils.readCSVFromFileSystem(importedFilePath);
+      
       if (fileData) {
         // 前置显示uTools窗口
         window.utils.showMainWindow();
@@ -92,64 +214,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     
-    // 监听来自uTools的消息
-    if (window.utools) {
-      window.utools.onPluginEnter(({ code, type, payload }) => {
-        if (code === 'csv-split' && type === 'imported' && payload) {
-          // 从文件系统读取CSV文件
-          const fileData = window.utils.readCSVFromFileSystem(payload);
-          if (fileData) {
-            // 处理导入的文件
-            handleImportedFile(fileData);
-          }
+    // 定期检查是否有新的导入文件（作为备用方案）
+    setInterval(() => {
+      const newImportedFilePath = window.utils.getImportedFilePath();
+      if (newImportedFilePath) {
+        // 清除导入的文件路径，避免重复处理
+        window.utils.clearImportedFilePath();
+        
+        // 从文件系统读取CSV文件
+        const fileData = window.utils.readCSVFromFileSystem(newImportedFilePath);
+        if (fileData) {
+          // 处理导入的文件
+          handleImportedFile(fileData);
         }
-      });
-    }
+      }
+    }, 1000); // 每秒检查一次
   }
   
-  // 处理从超级面板导入的文件
-  function handleImportedFile(fileData) {
-    selectedFile = {
-      name: fileData.name,
-      size: fileData.size,
-      type: 'text/csv'
-    };
-    
-    filePath = fileData.path;
-    csvContent = fileData.content;
-    
-    // 显示文件信息
-    const fileNameElement = document.createElement('p');
-    fileNameElement.textContent = `已选择文件: ${fileData.name}`;
-    fileNameElement.style.fontWeight = 'bold';
-    fileNameElement.style.marginTop = '10px';
-    
-    // 清除之前的文件名显示
-    const existingFileNames = dropArea.querySelectorAll('p:not(:first-child)');
-    existingFileNames.forEach(el => el.remove());
-    
-    dropArea.appendChild(fileNameElement);
-    
-    // 解析CSV内容
-    parseCSV(csvContent);
-    
-    // 显示文件信息
-    fileInfo.innerHTML = `
-      <p>文件名: ${fileData.name}</p>
-      <p>文件大小: ${formatFileSize(fileData.size)}</p>
-      <p>总行数: ${csvRows.length + 1} (含表头)</p>
-      <p>数据行数: ${csvRows.length}</p>
-      <p class="info-text">文件来源: 超级面板导入</p>
-    `;
-    
-    // 设置默认每份行数为总行数的1/10，最小为1000，最大为10000
-    const suggestedRowsPerFile = Math.min(Math.max(Math.round(csvRows.length / 10), 1000), 10000);
-    rowsPerFile.value = suggestedRowsPerFile;
-    
-    // 启用拆分按钮
-    splitBtn.disabled = false;
-  }
-
   // 处理文件
   function handleFile(file) {
     if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
@@ -201,23 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     reader.readAsText(file);
   }
-
-  // 解析CSV
-  function parseCSV(content) {
-    const lines = content.split(/\r\n|\n/);
-    csvHeader = lines[0];
-    csvRows = lines.slice(1).filter(line => line.trim() !== '');
-  }
-
-  // 格式化文件大小
-  function formatFileSize(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-
+  
   // 拆分按钮点击事件
   splitBtn.addEventListener('click', () => {
     const rows = parseInt(rowsPerFile.value);
@@ -248,65 +313,72 @@ document.addEventListener('DOMContentLoaded', () => {
     // 显示结果区域
     resultArea.style.display = 'block';
     resultArea.classList.add('show');
+    
+    // 重置进度条
     progressBar.style.width = '0%';
-    resultMessage.textContent = '正在处理...';
+    
+    // 显示处理中信息
+    resultMessage.textContent = '正在处理文件...';
     
     // 滚动到结果区域
     scrollToResults();
-
-    // 计算需要拆分的文件数量
-    const totalRows = csvRows.length;
-    const fileCount = Math.ceil(totalRows / rowsPerFile);
     
-    // 创建拆分后的文件
+    // 计算需要拆分的文件数量
+    const fileCount = Math.ceil(csvRows.length / rowsPerFile);
+    
+    // 准备文件数组
     const files = [];
     
-    // 使用setTimeout来避免UI阻塞，并显示进度条动画
+    // 使用setTimeout来避免UI阻塞
     setTimeout(() => {
       processFiles(0, fileCount, rowsPerFile, files);
     }, 100);
   }
-  
-  // 分批处理文件，避免UI阻塞
+
+  // 处理文件
   function processFiles(index, fileCount, rowsPerFile, files) {
-    const totalRows = csvRows.length;
-    const batchSize = 5; // 每批处理的文件数
-    const endIndex = Math.min(index + batchSize, fileCount);
-    
-    for (let i = index; i < endIndex; i++) {
-      const start = i * rowsPerFile;
-      const end = Math.min(start + rowsPerFile, totalRows);
+    if (index >= fileCount) {
+      // 所有文件处理完成，保存文件
+      progressBar.style.width = '100%';
+      resultMessage.textContent = `拆分完成，正在保存 ${fileCount} 个文件...`;
       
-      if (start >= totalRows) break;
-      
-      // 提取当前分片的行
-      const currentRows = csvRows.slice(start, end);
-      
-      // 添加表头
-      const fileContent = csvHeader + '\n' + currentRows.join('\n');
-      
-      // 创建文件名
-      const fileName = getFileNameWithoutExtension(selectedFile.name) + `_part${i+1}.csv`;
-      
-      files.push({
-        name: fileName,
-        content: fileContent
-      });
-      
-      // 更新进度条
-      const progress = Math.min(((i + 1) / fileCount) * 100, 100);
-      progressBar.style.width = `${progress}%`;
-    }
-    
-    if (endIndex < fileCount) {
-      // 继续处理下一批
+      // 保存文件
       setTimeout(() => {
-        processFiles(endIndex, fileCount, rowsPerFile, files);
-      }, 0);
-    } else {
-      // 所有文件处理完毕，保存文件
-      saveFiles(files);
+        saveFiles(files);
+      }, 100);
+      return;
     }
+    
+    // 更新进度条
+    const progress = Math.round((index / fileCount) * 100);
+    progressBar.style.width = `${progress}%`;
+    
+    // 更新状态信息
+    resultMessage.textContent = `正在处理第 ${index + 1}/${fileCount} 个文件...`;
+    
+    // 计算当前文件的行范围
+    const startRow = index * rowsPerFile;
+    const endRow = Math.min(startRow + rowsPerFile, csvRows.length);
+    
+    // 提取当前文件的行
+    const currentRows = csvRows.slice(startRow, endRow);
+    
+    // 添加表头
+    const fileContent = csvHeader + '\n' + currentRows.join('\n');
+    
+    // 生成文件名
+    const fileName = getFileNameWithoutExtension(selectedFile.name) + `_part${index + 1}.csv`;
+    
+    // 添加到文件数组
+    files.push({
+      name: fileName,
+      content: fileContent
+    });
+    
+    // 处理下一个文件
+    setTimeout(() => {
+      processFiles(index + 1, fileCount, rowsPerFile, files);
+    }, 10);
   }
 
   // 获取不带扩展名的文件名
@@ -316,13 +388,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 保存文件
   function saveFiles(files) {
-    // 使用preload.js中定义的工具函数保存文件到文件夹
     try {
+      // 保存文件到文件系统
       const result = window.utils.saveFilesToFolder(files, filePath);
       
       if (result.success) {
         resultMessage.innerHTML = `
-          <p>成功将CSV文件拆分为<strong>${files.length}</strong>份，每份包含<strong>${rowsPerFile.value}</strong>行数据(最后一份可能不足)，并已保存到文件夹：</p>
+          <p>拆分完成！已成功保存 ${result.fileCount} 个文件到以下文件夹：</p>
           <div class="folder-path">${result.folderPath}</div>
           <button class="btn" id="openFolderBtn" style="margin-top: 15px;">打开文件夹</button>
         `;
@@ -355,4 +427,4 @@ document.addEventListener('DOMContentLoaded', () => {
     void resultArea.offsetWidth; // 触发重绘
     resultArea.classList.add('show');
   }
-}); 
+});

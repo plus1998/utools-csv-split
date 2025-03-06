@@ -8,11 +8,23 @@ window.exports = {
     args: {
       enter: (action) => {
         // 插件装载时调用
-        console.log('CSV拆分工具已启动');
         window.utools.setExpendHeight(600);
         window.utools.setSubInput(({ text }) => {
           // 可以在这里处理搜索框输入
         }, '搜索或输入命令');
+        
+        // 检查是否有从超级面板传递的文件
+        if (action.type === 'imported' && action.payload) {
+          window.importedFilePath = action.payload;
+        }
+        
+        // 检查是否有从超级面板传递的文件
+        if (action.type === 'files' && action.payload && action.payload.length > 0) {
+          const file = action.payload[0];
+          if (file.isFile && file.path.toLowerCase().endsWith('.csv')) {
+            window.importedFilePath = file.path;
+          }
+        }
       },
       search: (action, searchWord, callbackSetList) => {
         // 用户在搜索框输入时调用
@@ -31,7 +43,6 @@ window.exports = {
     args: {
       enter: (action, callbackSetList) => {
         // 从超级面板进入时的处理
-        // 检查是否有文件参数
         if (action.type === 'files' && action.payload && action.payload.length > 0) {
           // 获取文件路径
           const filePath = action.payload[0].path;
@@ -41,8 +52,17 @@ window.exports = {
             // 将文件路径保存到全局变量，供渲染进程使用
             window.importedFilePath = filePath;
             
-            // 打开主窗口
-            window.utools.redirect('csv-split', '', { type: 'imported', payload: filePath });
+            // 直接打开主窗口，不使用redirect
+            window.utools.hideMainWindow();
+            
+            // 使用redirect打开主窗口并传递文件路径
+            window.utools.redirect('csv-split', '', { type: 'files', payload: action.payload });
+            
+            // 确保窗口显示
+            setTimeout(() => {
+              window.utools.showMainWindow();
+              window.utools.setExpendHeight(600);
+            }, 100);
           } else {
             // 不是CSV文件，显示错误提示
             window.utools.showNotification('请选择CSV文件');
@@ -89,7 +109,6 @@ window.utils = {
         fileCount: savedFiles.length
       };
     } catch (error) {
-      console.error('保存文件时出错:', error);
       return {
         success: false,
         error: error.message
@@ -115,7 +134,7 @@ window.utils = {
   // 获取文件路径
   getFilePath: (file) => {
     // 使用uTools API获取文件路径
-    if (file.path) {
+    if (file && file.path) {
       return file.path;
     }
     
@@ -123,7 +142,7 @@ window.utils = {
     if (window.utools && window.utools.showOpenDialog) {
       const result = window.utools.showOpenDialog({
         title: '选择保存位置',
-        defaultPath: file.name,
+        defaultPath: file ? file.name : 'untitled.csv',
         buttonLabel: '保存'
       });
       
@@ -148,7 +167,7 @@ window.utils = {
           const currentHeight = window.utools.getExpendHeight();
           window.utools.setExpendHeight(currentHeight);
         } catch (e) {
-          console.error('设置窗口置顶失败:', e);
+          // 忽略错误
         }
       }, 100);
     }
@@ -157,7 +176,14 @@ window.utils = {
   // 从文件系统读取CSV文件
   readCSVFromFileSystem: (filePath) => {
     try {
-      if (!filePath) return null;
+      if (!filePath) {
+        return null;
+      }
+      
+      // 检查文件是否存在
+      if (!fs.existsSync(filePath)) {
+        return null;
+      }
       
       // 读取文件内容
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -173,7 +199,6 @@ window.utils = {
         size: stats.size
       };
     } catch (error) {
-      console.error('读取CSV文件出错:', error);
       return null;
     }
   },
