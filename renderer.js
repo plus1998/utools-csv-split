@@ -4,6 +4,7 @@ let csvContent = null;
 let csvHeader = null;
 let csvRows = null;
 let filePath = null;
+let fileEncoding = 'utf8';
 let dropArea, fileInput, selectFileBtn, splitBtn, rowsPerFile, fileInfo, resultArea, progressBar, resultMessage;
 
 // 处理从超级面板导入的文件
@@ -35,6 +36,7 @@ function handleImportedFile(fileData) {
     
     filePath = fileData.path;
     csvContent = fileData.content;
+    fileEncoding = fileData.encoding || 'utf8';
     
     // 显示文件信息
     const fileNameElement = document.createElement('p');
@@ -56,10 +58,11 @@ function handleImportedFile(fileData) {
       return;
     }
     
-    // 显示文件信息
+    // 显示文件信息，包括编码
     fileInfo.innerHTML = `
       <p>文件名: ${fileData.name}</p>
       <p>文件大小: ${formatFileSize(fileData.size)}</p>
+      <p>文件编码: ${fileEncoding.toUpperCase()}</p>
       <p>总行数: ${csvRows.length + 1} (含表头)</p>
       <p>数据行数: ${csvRows.length}</p>
       <p class="info-text">文件来源: 超级面板导入</p>
@@ -259,12 +262,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const reader = new FileReader();
     reader.onload = (e) => {
       csvContent = e.target.result;
+      // 尝试获取文件编码
+      fileEncoding = window.utils.getFileEncoding();
+      
       parseCSV(csvContent);
       
-      // 显示文件信息
+      // 显示文件信息，包括编码
       fileInfo.innerHTML = `
         <p>文件名: ${file.name}</p>
         <p>文件大小: ${formatFileSize(file.size)}</p>
+        <p>文件编码: ${fileEncoding.toUpperCase()}</p>
         <p>总行数: ${csvRows.length + 1} (含表头)</p>
         <p>数据行数: ${csvRows.length}</p>
         <p class="info-text">文件来源: 手动选择</p>
@@ -396,6 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         resultMessage.innerHTML = `
           <p>拆分完成！已成功保存 ${result.fileCount} 个文件到以下文件夹：</p>
           <div class="folder-path">${result.folderPath}</div>
+          <p class="info-text">文件编码: ${(result.encoding || fileEncoding).toUpperCase()}</p>
           <button class="btn" id="openFolderBtn" style="margin-top: 15px;">打开文件夹</button>
         `;
         

@@ -1,6 +1,7 @@
 // preload.js
 const fs = require('fs');
 const path = require('path');
+const iconv = require('iconv-lite');
 
 window.exports = {
   "csv-split": {
@@ -76,6 +77,61 @@ window.exports = {
 // 暴露一些常用的API给渲染进程
 window.utools = window.utools || {};
 
+// 检测文件编码
+function detectFileEncoding(buffer) {
+  // 检测BOM标记
+  if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
+    return 'utf8';
+  }
+  
+  // 检测UTF-16LE BOM
+  if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
+    return 'utf16le';
+  }
+  
+  // 检测UTF-16BE BOM
+  if (buffer.length >= 2 && buffer[0] === 0xFE && buffer[1] === 0xFF) {
+    return 'utf16be';
+  }
+  
+  // 初步检测是否包含中文字符
+  let hasChineseChar = false;
+  for (let i = 0; i < Math.min(buffer.length, 1000); i++) {
+    // 检测常见中文Unicode范围
+    if (buffer[i] >= 0x80) {
+      hasChineseChar = true;
+      break;
+    }
+  }
+  
+  // 如果包含中文字符，优先使用GBK
+  if (hasChineseChar) {
+    // 尝试转换一小部分内容看是否有乱码
+    try {
+      const utf8Sample = iconv.decode(buffer.slice(0, Math.min(buffer.length, 100)), 'utf8');
+      // 检查转换后的UTF-8字符串是否包含替换字符
+      if (!utf8Sample.includes('')) {
+        return 'utf8';
+      }
+      
+      // 尝试GBK解码
+      const gbkSample = iconv.decode(buffer.slice(0, Math.min(buffer.length, 100)), 'gbk');
+      if (!gbkSample.includes('')) {
+        return 'gbk';
+      }
+    } catch (e) {
+      // 解码失败，默认使用GBK
+      return 'gbk';
+    }
+    
+    // 默认返回GBK，因为中文Windows系统常用编码
+    return 'gbk';
+  }
+  
+  // 没有特殊标记且没有中文字符，默认使用UTF-8
+  return 'utf8';
+}
+
 // 添加一些工具函数
 window.utils = {
   // 保存文件到指定目录
@@ -94,11 +150,25 @@ window.utils = {
         fs.mkdirSync(outputFolderPath, { recursive: true });
       }
       
+      // 获取原始文件的编码
+      const fileEncoding = window.fileEncoding || 'utf8';
+      
       // 保存所有文件
       const savedFiles = [];
       files.forEach(file => {
         const filePath = path.join(outputFolderPath, file.name);
-        fs.writeFileSync(filePath, file.content);
+        
+        // 使用检测到的原始文件编码保存拆分后的文件
+        let buffer;
+        if (fileEncoding !== 'utf8') {
+          // 如果不是UTF-8，需要先转换
+          buffer = iconv.encode(file.content, fileEncoding);
+          fs.writeFileSync(filePath, buffer);
+        } else {
+          // 如果是UTF-8，直接写入
+          fs.writeFileSync(filePath, file.content, { encoding: fileEncoding });
+        }
+        
         savedFiles.push(filePath);
       });
       
@@ -106,7 +176,8 @@ window.utils = {
       return {
         success: true,
         folderPath: outputFolderPath,
-        fileCount: savedFiles.length
+        fileCount: savedFiles.length,
+        encoding: fileEncoding
       };
     } catch (error) {
       return {
@@ -185,8 +256,17 @@ window.utils = {
         return null;
       }
       
-      // 读取文件内容
-      const content = fs.readFileSync(filePath, 'utf-8');
+      // 读取文件内容为Buffer，以便检测编码
+      const buffer = fs.readFileSync(filePath);
+      
+      // 检测文件编码
+      const encoding = detectFileEncoding(buffer);
+      
+      // 保存检测到的编码，以便后续写入时使用
+      window.fileEncoding = encoding;
+      
+      // 根据检测到的编码解码内容
+      const content = iconv.decode(buffer, encoding);
       
       // 获取文件信息
       const stats = fs.statSync(filePath);
@@ -196,7 +276,8 @@ window.utils = {
         name: fileName,
         path: filePath,
         content: content,
-        size: stats.size
+        size: stats.size,
+        encoding: encoding
       };
     } catch (error) {
       return null;
@@ -211,5 +292,10 @@ window.utils = {
   // 清除导入的文件路径
   clearImportedFilePath: () => {
     window.importedFilePath = null;
+  },
+  
+  // 获取当前检测到的文件编码
+  getFileEncoding: () => {
+    return window.fileEncoding || 'utf8';
   }
 }; 
